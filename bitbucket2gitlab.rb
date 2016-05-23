@@ -7,10 +7,11 @@ require 'logger'
 require 'pry'
 
 clients          = {}
-private_tokens   = {}
+private_tokens   = {'bitbucket_username' => 'gitlab_private_token',
+                    'bitbucket_collaborator2' => 'gitlab_collaborator_private_token'}
 issues_json_file = '/tmp/db-1.0.json'
-api_url          = ''
-project_name     = 'repos/test'
+api_url          = 'https://gitlab.example.net/api/v3'
+project_name     = 'repo/name'
 project          = nil
 
 MAP_ISSUE = {
