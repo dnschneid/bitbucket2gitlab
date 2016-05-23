@@ -21,10 +21,22 @@ MAP_ISSUE = {
     content:    :description,
 }
 
+MAP_PRIORITY = {
+    "trivial" => "P4",
+    "minor" => "P3",
+    "major" => "P2",
+    "critical" => "P1",
+    "blocker" => "P0"
+}
+
 class BitBucket2Gitlab
 
   def self.milestones
     @@milestones ||= []
+  end
+
+  def self.labels
+    @@labels ||= []
   end
 
   def self.users
@@ -56,6 +68,11 @@ end
 def gitlab_milestone_id(bitbucket_name)
   return nil if BitBucket2Gitlab.milestones.empty?
   BitBucket2Gitlab.milestones.select { |m| m.title == bitbucket_name }.first.id rescue nil
+end
+
+def gitlab_label_id(bitbucket_name)
+  return nil if BitBucket2Gitlab.labels.empty?
+  BitBucket2Gitlab.labels.select { |m| m.name == bitbucket_name }.first.name rescue nil
 end
 
 def translate_data(data, map)
@@ -101,6 +118,25 @@ data.milestones.each do |bitbucket_milestone|
   end
 end
 
+# create labels
+gitlab.labels(project.id).each do |m|
+  BitBucket2Gitlab.labels.push(m)
+end
+MAP_PRIORITY.each do |priority, label|
+  data.components.push({name: label})
+end
+data.components.push({name: "on hold"})
+
+logger.info "found #{data.components.count} components to migrate to labels"
+
+data.components.each do |bitbucket_component|
+  if gitlab_label_id(bitbucket_component.name)
+    logger.debug "skipping existing label '#{bitbucket_component.name}'"
+  else
+    gitlab.create_label(project.id, bitbucket_component.name, '#808080')
+  end
+end
+
 logger.info "found #{data.issues.count} issues to migrate"
 
 data.issues.sort{ |a, b| a.id <=> b.id }.each do |bitbucket_issue|
@@ -114,6 +150,11 @@ data.issues.sort{ |a, b| a.id <=> b.id }.each do |bitbucket_issue|
 
   issue_data[:assignee_id]  = gitlab_user_id(bitbucket_issue.assignee) rescue nil
   issue_data[:milestone_id] = gitlab_milestone_id(bitbucket_issue.milestone) rescue nil
+  issue_data[:labels] = MAP_PRIORITY[bitbucket_issue.priority]
+  issue_data[:labels] += "," + bitbucket_issue.component unless bitbucket_issue.component.nil?
+  if bitbucket_issue.status == "on hold"
+    issue_data[:labels] += ",on hold"
+  end
 
   issue = gitlab(bitbucket_issue.reporter).create_issue(project.id, bitbucket_issue.title, issue_data)
 
@@ -126,7 +167,7 @@ data.issues.sort{ |a, b| a.id <=> b.id }.each do |bitbucket_issue|
 
   end
 
-  gitlab(bitbucket_issue.reporter).close_issue(project.id, issue.id) if bitbucket_issue.status == 'resolved'
+  gitlab(bitbucket_issue.reporter).close_issue(project.id, issue.id) if (bitbucket_issue.status == 'resolved' or bitbucket_issue.status == 'on hold')
 
 end
 
