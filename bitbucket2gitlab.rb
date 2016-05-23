@@ -108,19 +108,21 @@ data.issues.sort{ |a, b| a.id <=> b.id }.each do |bitbucket_issue|
   # TODO: detect duplicates
 
   issue_data = translate_data(bitbucket_issue, MAP_ISSUE)
+  bitbucket_comments = data['comments'].select { |c| c['issue'] == bitbucket_issue.id }.sort { |a, b| a['created_on'] <=> b['created_on'] }
 
-  issue_data[:assignee_id]  = gitlab_user_id(bitbucket_issue.assignee)
-  issue_data[:milestone_id] = gitlab_milestone_id(bitbucket_issue.milestone)
+  logger.info "migrating issue by " + bitbucket_issue.reporter + " with #{bitbucket_comments.length} comments"
+
+  issue_data[:assignee_id]  = gitlab_user_id(bitbucket_issue.assignee) rescue nil
+  issue_data[:milestone_id] = gitlab_milestone_id(bitbucket_issue.milestone) rescue nil
 
   issue = gitlab(bitbucket_issue.reporter).create_issue(project.id, bitbucket_issue.title, issue_data)
-
-  bitbucket_comments = data['comments'].select { |c| c['issue'] == issue.id }.sort { |a, b| a['created_on'] <=> b['created_on'] } rescue []
 
   bitbucket_comments.each do |bitbucket_comment|
 
     content = bitbucket_comment.content
-    content = '-' if content.nil?
-    comment = gitlab(bitbucket_comment['user']).create_issue_note(project.id, issue.id, content)
+    if not content.nil?
+      comment = gitlab(bitbucket_comment['user']).create_issue_note(project.id, issue.id, content)
+    end
 
   end
 
