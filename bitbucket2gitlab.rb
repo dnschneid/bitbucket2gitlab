@@ -103,7 +103,7 @@ end
 
 logger.info "found #{data.issues.count} issues to migrate"
 
-data.issues.each do |bitbucket_issue|
+data.issues.sort{ |a, b| a.id <=> b.id }.each do |bitbucket_issue|
 
   # TODO: detect duplicates
 
